@@ -1,6 +1,7 @@
 package producer
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -9,12 +10,14 @@ import (
 
 	"github.com/antihax/optional"
 
+	ben_models "github.com/BENHSU0723/openapi_public/models"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
 	Nudr "github.com/free5gc/openapi/Nudr_DataRepository"
 	"github.com/free5gc/openapi/models"
 	udm_context "github.com/free5gc/udm/internal/context"
 	"github.com/free5gc/udm/internal/logger"
+	"github.com/free5gc/udm/internal/util"
 	"github.com/free5gc/util/httpwrapper"
 )
 
@@ -1540,4 +1543,53 @@ func containDataSetName(dataSetNames []string, target string) bool {
 		}
 	}
 	return false
+}
+
+func HandleGetGroupIdentifiers(request *httpwrapper.Request) *httpwrapper.Response {
+	// suppFeat:=request.Query.Get("supported-features")
+	afId := request.Query.Get("af-id")
+	extGpId := request.Query.Get("ext-groud-id")
+	intGpId := request.Query.Get("int-groud-id")
+	ueIdInd := request.Query.Get("ue-id-ind")
+
+	groupIds, problemDetails := getGroupIdentifiersProcedure(afId, extGpId, intGpId, ueIdInd)
+	if problemDetails != nil {
+		return httpwrapper.NewResponse(int(problemDetails.Status), nil, problemDetails)
+	} else {
+		return httpwrapper.NewResponse(http.StatusOK, nil, groupIds)
+	}
+}
+
+func getGroupIdentifiersProcedure(afId, extGpId, intGpId, ueIdInd string) (*ben_models.GroupIdentifiers, *models.ProblemDetails) {
+	// TODO: do authorization on AF Id
+	// AF Identifier, see 3GPP TS 23.502 [3] clause 4.13.2.2 and clause 4.13.7.2
+	// If not present, additional authorization on AF indentifier is not required (see 3GPP TS 23.502 [3] clause 4.15.6.8)
+
+	// use external group id OR internal groip id as UDR searching id
+	inputGpId := extGpId
+	if inputGpId == "" {
+		inputGpId = intGpId
+	}
+	clientAPI, err := createBenUDMClientToUDR(inputGpId)
+	if err != nil {
+		logger.VnGroupLog.Errorln("createUDMClientToUDR error: " + err.Error())
+		return nil, util.ProblemDetailsSystemFailure(err.Error())
+	}
+
+	var ueRequire bool = false
+	if ueIdInd == "1" {
+		ueRequire = true
+	}
+	groupIds, res, err := clientAPI.GroupIdentifiersDocumentApi.GetGroupIdsAndUeIds(context.Background(), extGpId, intGpId, ueRequire)
+	if err != nil {
+		logger.SdmLog.Warnf("getGroupIdentifiersProcedure error:%v\n", err.Error())
+		problemDetails := &models.ProblemDetails{
+			Status: int32(res.StatusCode),
+			Cause:  err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails).Cause,
+			Detail: err.Error(),
+		}
+		return nil, problemDetails
+	}
+	logger.SdmLog.Infoln("getGroupIdentifiersProcedure success!!")
+	return &groupIds, nil
 }

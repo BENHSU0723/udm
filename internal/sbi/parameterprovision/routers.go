@@ -88,4 +88,39 @@ var routes = Routes{
 		"/:gpsi/pp-data",
 		HTTPUpdate,
 	},
+
+	{
+		"GetParameterProvisionPerAF",
+		strings.ToUpper("Get"),
+		"/:ueId/pp-data-store/:afInstanceId",
+		GetParameterProvisionPerAF,
+	},
+
+	{
+		"Create5GLANGroup",
+		strings.ToUpper("Put"),
+		"/5g-vn-groups/:extGroupId",
+		Create5GVNGroup,
+	},
+
+	{
+		"Delete5GLANGroup",
+		strings.ToUpper("Delete"),
+		"/5g-vn-groups/:extGroupId",
+		Delete5GVNGroup,
+	},
+
+	{
+		"Modify5GLANGroup",
+		strings.ToUpper("Patch"),
+		"/5g-vn-groups/:extGroupId",
+		Modify5GVNGroup,
+	},
+
+	{
+		"Get5GLANGroup",
+		strings.ToUpper("Get"),
+		"/5g-vn-groups/:extGroupId",
+		Get5GVNGroup,
+	},
 }

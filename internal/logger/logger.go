@@ -25,6 +25,7 @@ var (
 	SuciLog     *logrus.Entry
 	CallbackLog *logrus.Entry
 	ProcLog     *logrus.Entry
+	VnGroupLog  *logrus.Entry
 )
 
 func init() {
@@ -51,4 +52,5 @@ func init() {
 	UtilLog = NfLog.WithField(logger_util.FieldCategory, "Util")
 	SuciLog = NfLog.WithField(logger_util.FieldCategory, "Suci")
 	CallbackLog = NfLog.WithField(logger_util.FieldCategory, "Callback")
+	VnGroupLog = NfLog.WithField(logger_util.FieldCategory, "VNGROUP")
 }

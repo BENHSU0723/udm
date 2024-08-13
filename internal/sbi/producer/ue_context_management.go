@@ -8,8 +8,10 @@ import (
 
 	"github.com/antihax/optional"
 
+	ben_Nudr "github.com/BENHSU0723/openapi_public/Nudr_DataRepository"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudr_DataRepository"
+
 	"github.com/free5gc/openapi/models"
 	udm_context "github.com/free5gc/udm/internal/context"
 	"github.com/free5gc/udm/internal/logger"
@@ -27,6 +29,19 @@ func createUDMClientToUDR(id string) (*Nudr_DataRepository.APIClient, error) {
 	cfg := Nudr_DataRepository.NewConfiguration()
 	cfg.SetBasePath(uri)
 	clientAPI := Nudr_DataRepository.NewAPIClient(cfg)
+	return clientAPI, nil
+}
+
+// temporary used, these apis used are under developing and waiting for merging
+func createBenUDMClientToUDR(id string) (*ben_Nudr.APIClient, error) {
+	uri := getUdrURI(id)
+	if uri == "" {
+		logger.ProcLog.Errorf("ID[%s] does not match any UDR", id)
+		return nil, fmt.Errorf("No UDR URI found")
+	}
+	cfg := ben_Nudr.NewConfiguration()
+	cfg.SetBasePath(uri)
+	clientAPI := ben_Nudr.NewAPIClient(cfg)
 	return clientAPI, nil
 }
 

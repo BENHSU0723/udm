@@ -175,6 +175,13 @@ var routes = Routes{
 		"/",
 		Index,
 	},
+	{
+		// this API refer to TS29503 v17.9.0, apiVersion=2
+		"GetGroupIdentifiers",
+		strings.ToUpper("Get"),
+		"/group-data/group-identifiers",
+		HTTPGetGroupIdentifiers,
+	},
 }
 
 /*
