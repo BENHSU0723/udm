@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/uuid"
 
+	ben_models "github.com/BENHSU0723/openapi_public/models"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nnrf_NFDiscovery"
 	"github.com/free5gc/openapi/models"
@@ -55,8 +56,8 @@ type UDMContext struct {
 	NrfUri                         string
 	NrfCertPem                     string
 	GpsiSupiList                   models.IdentityData
-	SharedSubsDataMap              map[string]models.SharedData // sharedDataIds as key
-	SubscriptionOfSharedDataChange sync.Map                     // subscriptionID as key
+	SharedSubsDataMap              map[string]ben_models.SharedData // sharedDataIds as key
+	SubscriptionOfSharedDataChange sync.Map                         // subscriptionID as key
 	SuciProfiles                   []suci.SuciProfile
 	EeSubscriptionIDGenerator      *idgenerator.IDGenerator
 	OAuth2Required                 bool
@@ -74,7 +75,7 @@ type UdmUeContext struct {
 	UeCtxtInSmfData                   *models.UeContextInSmfData
 	TraceDataResponse                 models.TraceDataResponse
 	TraceData                         *models.TraceData
-	SessionManagementSubsData         map[string]models.SessionManagementSubscriptionData
+	SessionManagementSubsData         map[string]ben_models.SessionManagementSubscriptionData
 	SubsDataSets                      *models.SubscriptionDataSets
 	SubscribeToNotifChange            map[string]*models.SdmSubscription
 	SubscribeToNotifSharedDataChange  *models.SdmSubscription
@@ -139,16 +140,16 @@ func InitUdmContext(context *UDMContext) {
 	udmContext.InitNFService(servingNameList, config.Info.Version)
 }
 
-func (context *UDMContext) ManageSmData(smDatafromUDR []models.SessionManagementSubscriptionData, snssaiFromReq string,
-	dnnFromReq string) (mp map[string]models.SessionManagementSubscriptionData, ind string,
-	Dnns []models.DnnConfiguration, allDnns []map[string]models.DnnConfiguration,
+func (context *UDMContext) ManageSmData(smDatafromUDR []ben_models.SessionManagementSubscriptionData, snssaiFromReq string,
+	dnnFromReq string) (mp map[string]ben_models.SessionManagementSubscriptionData, ind string,
+	Dnns []ben_models.DnnConfiguration, allDnns []map[string]ben_models.DnnConfiguration,
 ) {
-	smDataMap := make(map[string]models.SessionManagementSubscriptionData)
+	smDataMap := make(map[string]ben_models.SessionManagementSubscriptionData)
 	sNssaiList := make([]string, len(smDatafromUDR))
 	// to obtain all DNN configurations identified by "dnn" for all network slices where such DNN is available
-	AllDnnConfigsbyDnn := make([]models.DnnConfiguration, len(sNssaiList))
+	AllDnnConfigsbyDnn := make([]ben_models.DnnConfiguration, len(sNssaiList))
 	// to obtain all DNN configurations for all network slice(s)
-	AllDnns := make([]map[string]models.DnnConfiguration, len(smDatafromUDR))
+	AllDnns := make([]map[string]ben_models.DnnConfiguration, len(smDatafromUDR))
 	var snssaikey string // Required snssai to obtain all DNN configurations
 
 	for idx, smSubscriptionData := range smDatafromUDR {
@@ -169,15 +170,15 @@ func (context *UDMContext) ManageSmData(smDatafromUDR []models.SessionManagement
 }
 
 // HandleGetSharedData related functions
-func MappingSharedData(sharedDatafromUDR []models.SharedData) (mp map[string]models.SharedData) {
-	sharedSubsDataMap := make(map[string]models.SharedData)
+func MappingSharedData(sharedDatafromUDR []ben_models.SharedData) (mp map[string]ben_models.SharedData) {
+	sharedSubsDataMap := make(map[string]ben_models.SharedData)
 	for i := 0; i < len(sharedDatafromUDR); i++ {
 		sharedSubsDataMap[sharedDatafromUDR[i].SharedDataId] = sharedDatafromUDR[i]
 	}
 	return sharedSubsDataMap
 }
 
-func ObtainRequiredSharedData(Sharedids []string, response []models.SharedData) (sharedDatas []models.SharedData) {
+func ObtainRequiredSharedData(Sharedids []string, response []ben_models.SharedData) (sharedDatas []ben_models.SharedData) {
 	sharedSubsDataMap := MappingSharedData(response)
 	Allkeys := make([]string, len(sharedSubsDataMap))
 	MatchedKeys := make([]string, len(Sharedids))
@@ -195,7 +196,7 @@ func ObtainRequiredSharedData(Sharedids []string, response []models.SharedData) 
 		counter += 1
 	}
 
-	shared_Data := make([]models.SharedData, len(MatchedKeys))
+	shared_Data := make([]ben_models.SharedData, len(MatchedKeys))
 	if len(MatchedKeys) != 1 {
 		for i := 0; i < len(MatchedKeys); i++ {
 			shared_Data[i] = sharedSubsDataMap[MatchedKeys[i]]
@@ -273,7 +274,7 @@ func (udmUeContext *UdmUeContext) SetSmfSelectionSubsData(smfSelSubsData *models
 }
 
 // SetSMSubsData ... functions to set SessionManagementSubsData
-func (udmUeContext *UdmUeContext) SetSMSubsData(smSubsData map[string]models.SessionManagementSubscriptionData) {
+func (udmUeContext *UdmUeContext) SetSMSubsData(smSubsData map[string]ben_models.SessionManagementSubscriptionData) {
 	udmUeContext.SmSubsDataLock.Lock()
 	defer udmUeContext.SmSubsDataLock.Unlock()
 	udmUeContext.SessionManagementSubsData = smSubsData

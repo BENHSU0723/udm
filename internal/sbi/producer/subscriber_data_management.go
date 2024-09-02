@@ -10,6 +10,7 @@ import (
 
 	"github.com/antihax/optional"
 
+	ben_Nudr "github.com/BENHSU0723/openapi_public/Nudr_DataRepository"
 	ben_models "github.com/BENHSU0723/openapi_public/models"
 	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
@@ -258,7 +259,7 @@ func getSupiProcedure(supi string, plmnID string, dataSetNames []string, support
 	queryAmDataParamOpts.SupportedFeatures = optional.NewString(supportedFeatures)
 	var querySmfSelectDataParamOpts Nudr.QuerySmfSelectDataParamOpts
 	var queryTraceDataParamOpts Nudr.QueryTraceDataParamOpts
-	var querySmDataParamOpts Nudr.QuerySmDataParamOpts
+	var querySmDataParamOpts ben_Nudr.QuerySmDataParamOpts
 
 	queryAmDataParamOpts.SupportedFeatures = optional.NewString(supportedFeatures)
 	querySmfSelectDataParamOpts.SupportedFeatures = optional.NewString(supportedFeatures)
@@ -420,6 +421,10 @@ func getSupiProcedure(supi string, plmnID string, dataSetNames []string, support
 	// }
 
 	if containDataSetName(dataSetNames, string(models.DataSetName_SM)) {
+		clientAPI, err := createBenUDMClientToUDR(supi)
+		if err != nil {
+			return nil, openapi.ProblemDetailsSystemFailure(err.Error())
+		}
 		sessionManagementSubscriptionData, res, err := clientAPI.SessionManagementSubscriptionDataApi.
 			QuerySmData(ctx, supi, plmnID, &querySmDataParamOpts)
 		if err != nil {
@@ -449,6 +454,7 @@ func getSupiProcedure(supi string, plmnID string, dataSetNames []string, support
 			}
 			smData, _, _, _ := udm_context.GetSelf().ManageSmData(sessionManagementSubscriptionData, "", "")
 			udmUe.SetSMSubsData(smData)
+			sessionManagementSubscriptionData := smDataTransFromBenTofree5gc(sessionManagementSubscriptionData)
 			subscriptionDataSets.SmData = sessionManagementSubscriptionData
 		} else {
 			problemDetails = &models.ProblemDetails{
@@ -537,18 +543,18 @@ func HandleGetSharedDataRequest(request *httpwrapper.Request) *httpwrapper.Respo
 // TS 29.503 5.2.2.2.11
 // Shared Subscription Data Retrieval
 func getSharedDataProcedure(sharedDataIds []string, supportedFeatures string) (
-	response []models.SharedData, problemDetails *models.ProblemDetails,
+	response []ben_models.SharedData, problemDetails *models.ProblemDetails,
 ) {
 	ctx, pd, err := udm_context.GetSelf().GetTokenCtx(models.ServiceName_NUDR_DR, models.NfType_UDR)
 	if err != nil {
 		return nil, pd
 	}
-	clientAPI, err := createUDMClientToUDR("")
+	clientAPI, err := createBenUDMClientToUDR("")
 	if err != nil {
 		return nil, openapi.ProblemDetailsSystemFailure(err.Error())
 	}
 
-	var getSharedDataParamOpts Nudr.GetSharedDataParamOpts
+	var getSharedDataParamOpts ben_Nudr.GetSharedDataParamOpts
 	getSharedDataParamOpts.SupportedFeatures = optional.NewString(supportedFeatures)
 
 	sharedDataResp, res, err := clientAPI.RetrievalOfSharedDataApi.GetSharedData(ctx, sharedDataIds,
@@ -631,12 +637,12 @@ func getSmDataProcedure(supi string, plmnID string, Dnn string, Snssai string, s
 	}
 	logger.SdmLog.Infof("getSmDataProcedure: SUPI[%s] PLMNID[%s] DNN[%s] SNssai[%s]", supi, plmnID, Dnn, Snssai)
 
-	clientAPI, err := createUDMClientToUDR(supi)
+	clientAPI, err := createBenUDMClientToUDR(supi)
 	if err != nil {
 		return nil, openapi.ProblemDetailsSystemFailure(err.Error())
 	}
 
-	var querySmDataParamOpts Nudr.QuerySmDataParamOpts
+	var querySmDataParamOpts ben_Nudr.QuerySmDataParamOpts
 	querySmDataParamOpts.SingleNssai = optional.NewInterface(Snssai)
 
 	sessionManagementSubscriptionDataResp, res, err := clientAPI.SessionManagementSubscriptionDataApi.
@@ -672,10 +678,16 @@ func getSmDataProcedure(supi string, plmnID string, Dnn string, Snssai string, s
 			sessionManagementSubscriptionDataResp, Snssai, Dnn)
 		udmUe.SetSMSubsData(smData)
 
-		rspSMSubDataList := make([]models.SessionManagementSubscriptionData, 0, 4)
+		rspSMSubDataList := make([]ben_models.SessionManagementSubscriptionData, 0, 4)
 
 		udmUe.SmSubsDataLock.RLock()
 		for _, eachSMSubData := range udmUe.SessionManagementSubsData {
+			// check if support feature contains feature number 1(SharedData),
+			// details in TS 29.503 V17.9.0	, Table 6.1.8-1: Supported Features
+			// Octet ordering is defined at TS 129 571 - V16.6.0, Table 5.2.2-3
+			if !checkSupportShareData(supportedFeatures) {
+				eachSMSubData.SharedVnGroupDataIds = nil
+			}
 			rspSMSubDataList = append(rspSMSubDataList, eachSMSubData)
 		}
 		udmUe.SmSubsDataLock.RUnlock()
@@ -704,6 +716,86 @@ func getSmDataProcedure(supi string, plmnID string, Dnn string, Snssai string, s
 
 		return nil, problemDetails
 	}
+}
+
+// shareData Featnum = 1
+func checkSupportShareData(supportFeat string) bool {
+	// use the parseInt() function to convert
+	decimal_num, err := strconv.ParseInt(supportFeat, 16, 64)
+
+	// in case of any error
+	if err != nil {
+		logger.VnGroupLog.Errorln("get UE SM data error: paring IE(SupportFeature) to integer")
+		return false
+	}
+	if decimal_num%2 == 1 {
+		return true
+	}
+	return false
+}
+
+func smDataTransFromBenTofree5gc(smSubsData []ben_models.SessionManagementSubscriptionData) (rspData []models.SessionManagementSubscriptionData) {
+	for _, smData := range smSubsData {
+		dnnCfg := dnnConfigTrans(smData.DnnConfigurations)
+		rspData = append(rspData, models.SessionManagementSubscriptionData{
+			SingleNssai:                (*models.Snssai)(smData.SingleNssai),
+			InternalGroupIds:           smData.InternalGroupIds,
+			SharedDnnConfigurationsIds: smData.SharedDnnConfigurationsIds,
+			DnnConfigurations:          dnnCfg,
+		})
+	}
+	return
+}
+
+func dnnConfigTrans(dnnCfg map[string]ben_models.DnnConfiguration) map[string]models.DnnConfiguration {
+	rspCfgs := make(map[string]models.DnnConfiguration)
+	for idx, cfg := range dnnCfg {
+		var allPduType []models.PduSessionType
+		for _, pduType := range cfg.PduSessionTypes.AllowedSessionTypes {
+			allPduType = append(allPduType, models.PduSessionType(pduType))
+		}
+		var sscModes []models.SscMode
+		for _, sscMode := range cfg.SscModes.AllowedSscModes {
+			sscModes = append(sscModes, models.SscMode(sscMode))
+		}
+		var staticIps []models.IpAddress
+		for _, ip := range cfg.StaticIpAddress {
+			staticIps = append(staticIps, models.IpAddress(ip))
+		}
+
+		modelCfg := models.DnnConfiguration{
+			PduSessionTypes: &models.PduSessionTypes{
+				DefaultSessionType:  models.PduSessionType(cfg.PduSessionTypes.DefaultSessionType),
+				AllowedSessionTypes: allPduType,
+			},
+			SscModes: &models.SscModes{
+				DefaultSscMode:  models.SscMode(cfg.SscModes.DefaultSscMode),
+				AllowedSscModes: sscModes,
+			},
+			IwkEpsInd: cfg.IwkEpsInd,
+			Var5gQosProfile: &models.SubscribedDefaultQos{
+				Var5qi: cfg.Var5gQosProfile.Var5qi,
+				Arp: &models.Arp{
+					PriorityLevel: cfg.Var5gQosProfile.Arp.PriorityLevel,
+					PreemptCap:    models.PreemptionCapability(cfg.Var5gQosProfile.Arp.PreemptCap),
+					PreemptVuln:   models.PreemptionVulnerability(cfg.Var5gQosProfile.Arp.PreemptVuln),
+				},
+				PriorityLevel: cfg.Var5gQosProfile.PriorityLevel,
+			},
+			SessionAmbr: &models.Ambr{
+				Uplink:   cfg.SessionAmbr.Uplink,
+				Downlink: cfg.SessionAmbr.Downlink,
+			},
+			Var3gppChargingCharacteristics: cfg.Var3gppChargingCharacteristics,
+			StaticIpAddress:                staticIps,
+			UpSecurity: &models.UpSecurity{
+				UpIntegr: models.UpIntegrity(cfg.UpSecurity.UpIntegr),
+				UpConfid: models.UpConfidentiality(cfg.UpSecurity.UpConfid),
+			},
+		}
+		rspCfgs[idx] = modelCfg
+	}
+	return rspCfgs
 }
 
 func HandleGetNssaiRequest(request *httpwrapper.Request) *httpwrapper.Response {
