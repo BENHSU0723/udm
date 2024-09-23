@@ -105,9 +105,10 @@ func Handle5GLANCreateRequest(request *httpwrapper.Request, GroupConfig ben_mode
 	return nil, &resGroupConfig
 }
 
-func checkVnGroupConfigIsValid(request *httpwrapper.Request, GroupConfig ben_models.Model5GvnGroupConfiguration) (problemDetails *models.ProblemDetails) {
+func checkVnGroupConfigIsValid(request *httpwrapper.Request, groupConfig ben_models.Model5GvnGroupConfiguration) (problemDetails *models.ProblemDetails) {
 
-	members := GroupConfig.Members
+	// Step1: check all UEs have subscription datas in UDR, which means valid
+	members := groupConfig.Members
 	for _, memberUEid := range members {
 		clientAPI, err := createBenUDMClientToUDR(memberUEid)
 		if err != nil {
@@ -133,7 +134,6 @@ func checkVnGroupConfigIsValid(request *httpwrapper.Request, GroupConfig ben_mod
 			}
 		}()
 	}
-
 	logger.PpLog.Info("Authentication sucess!!, each member have subscribed")
 	return nil
 }
@@ -280,6 +280,7 @@ func HandleModify5GLANGroupRequest(request *httpwrapper.Request, c *gin.Context,
 }
 
 func Modify5gVnGroupProcedure(extGroupId, suppFeat string, newVn5gGpCfg ben_models.Model5GvnGroupConfiguration) (*ben_models.PatchResult, *models.ProblemDetails) {
+	logger.VnGroupLog.Infoln("Enter Modify5gVnGroupProcedure")
 	// different from general index is ueId, here using external group id as UDR searching id
 	clientAPI, err := createBenUDMClientToUDR(extGroupId)
 	if err != nil {
@@ -303,7 +304,7 @@ func Modify5gVnGroupProcedure(extGroupId, suppFeat string, newVn5gGpCfg ben_mode
 	}
 
 	// compare the origin group config and new group condfig, and make patch item list
-	patchItems, _ := makeGpPatchItems(oriGpCfg, newVn5gGpCfg)
+	patchItems, _ := makeGpPatchItemsForUDR(oriGpCfg, newVn5gGpCfg)
 
 	// Patch a group config throug UDR
 	patchResult, res, err := clientAPI.Individual5GvnGroup5GLanDocumentApi.Patch5GLANGroupData(context.Background(), extGroupId, patchItems, suppFeat)
@@ -317,10 +318,45 @@ func Modify5gVnGroupProcedure(extGroupId, suppFeat string, newVn5gGpCfg ben_mode
 		return nil, problemDetails
 	}
 
+	// IE: Multicast Group, It's a important IE that should be notified to SMF when it changed
+	// Notify SMF with Multicast Data Changed if Motify operation with UDR successes
+	if !reflect.DeepEqual(oriGpCfg.MulticastGroupList, newVn5gGpCfg.MulticastGroupList) &&
+		(res.StatusCode == http.StatusNoContent || res.StatusCode == http.StatusOK) {
+		patchItemsMulcst := makeGpPatchItemsForSMF(oriGpCfg, newVn5gGpCfg)
+		if len(patchItemsMulcst) != 0 {
+			PreHandleVn5gGroupDataChangeNotification(oriGpCfg.InternalGroupIdentifier, "no-content", patchItemsMulcst)
+		}
+	}
+
 	return &patchResult, nil
 }
 
-func makeGpPatchItems(oriGpCfg, newVn5gGpCfg ben_models.Model5GvnGroupConfiguration) ([]ben_models.PatchItem, []ben_models.ReportItem) {
+// only included Multicast group data changed of a single VN 5G group
+func makeGpPatchItemsForSMF(oriGpCfg, newVn5gGpCfg ben_models.Model5GvnGroupConfiguration) []ben_models.PatchItem {
+	multicastGpItems := make([]ben_models.PatchItem, 0)
+	// Currently make 'add' items for SMF
+	// TODO: add other PatchOperation Types
+	for _, newMultiGp := range newVn5gGpCfg.MulticastGroupList {
+		isNewGroup := true
+		for _, oldMultiGp := range oriGpCfg.MulticastGroupList {
+			if oldMultiGp.MultiGroupId == newMultiGp.MultiGroupId {
+				isNewGroup = false
+				break
+			}
+		}
+		// if it's a new created multicast group, then it sould been notified
+		if isNewGroup {
+			multicastGpItems = append(multicastGpItems, ben_models.PatchItem{
+				Op:    ben_models.PatchOperation_ADD,
+				Path:  "/multicastGroupList/-",
+				Value: newMultiGp,
+			})
+		}
+	}
+	return multicastGpItems
+}
+
+func makeGpPatchItemsForUDR(oriGpCfg, newVn5gGpCfg ben_models.Model5GvnGroupConfiguration) ([]ben_models.PatchItem, []ben_models.ReportItem) {
 	// refer to TS23.501 v17.7.0 section 5.29.2 5G VN group management, The PDU session type, DNN, S-NSSAI
 	// provided within 5G VN group data cannot be modified after the initial provisioning.
 	var forbiddenItems []ben_models.ReportItem
@@ -391,16 +427,26 @@ func makeGpPatchItems(oriGpCfg, newVn5gGpCfg ben_models.Model5GvnGroupConfigurat
 				Value: newVn5gGpCfg.Members,
 			})
 		}
-
-		logger.VnGroupLog.Warnf("Patch Item List:%+v\n", patchItems)
-
-		// this way still works, but UDR need to seperate add and delete to remove internal group id from sm/am subs data
-		// patchItems = append(patchItems, models.PatchItem{
-		// 	Op:    models.PatchOperation_ADD,
-		// 	Path:  "/members",
-		// 	Value: newVn5gGpCfg.Members,
-		// })
 	}
+
+	// Multicast group Info
+	if !reflect.DeepEqual(oriGpCfg.MulticastGroupList, newVn5gGpCfg.MulticastGroupList) {
+		patchItems = append(patchItems, ben_models.PatchItem{
+			Op:    ben_models.PatchOperation_REPLACE,
+			Path:  "/multicastGroupList",
+			Value: newVn5gGpCfg.MulticastGroupList,
+		})
+	}
+
+	logger.VnGroupLog.Warnf("Patch Item List:%+v\n", patchItems)
+
+	// this way still works, but UDR need to seperate add and delete to remove internal group id from sm/am subs data
+	// patchItems = append(patchItems, models.PatchItem{
+	// 	Op:    models.PatchOperation_ADD,
+	// 	Path:  "/members",
+	// 	Value: newVn5gGpCfg.Members,
+	// })
+
 	// TODO: add other IEs to patchItems
 	return patchItems, forbiddenItems
 }

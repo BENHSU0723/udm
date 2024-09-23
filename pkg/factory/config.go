@@ -33,6 +33,8 @@ const (
 	UdmUecmResUriPrefix           = "/nudm-uecm/v1"
 	UdmPpResUriPrefix             = "/nudm-pp/v1"
 	UdmUeauResUriPrefix           = "/nudm-ueau/v1"
+	// It's a self-defined API URL, it doesn't list in services of 3GPP TS 29.503
+	UdmCallbackUriPrefix = "/nudm-callback/v1"
 )
 
 type Config struct {

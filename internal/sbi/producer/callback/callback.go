@@ -1,6 +1,7 @@
 package callback
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/free5gc/openapi/Nudm_SubscriberDataManagement"
@@ -94,4 +95,58 @@ func SendOnDeregistrationNotification(ueId string, onDeregistrationNotificationU
 	}()
 
 	return nil
+}
+
+// Specifically for multicast groups data changed of a single VN 5GLAN Group
+func SendVn5gGroupDataChangeNotification(notifyItems []models.NotifyItem, groupId string) *models.ProblemDetails {
+	// TODO: tokex should be replaced with other suitable one
+	ctx, pd, err := udm_context.GetSelf().GetTokenCtx(models.ServiceName_NUDM_SDM, models.NfType_UDM)
+	if err != nil {
+		return pd
+	}
+
+	configuration := Nudm_SubscriberDataManagement.NewConfiguration()
+	clientAPI := Nudm_SubscriberDataManagement.NewAPIClient(configuration)
+	var problemDetails *models.ProblemDetails
+	dataChangeNotification := models.ModificationNotification{}
+	dataChangeNotification.NotifyItems = notifyItems
+
+	vn5gGpSubs := udm_context.GetSelf().UdmVn5gGroupDataSubscriptions[groupId]
+	// logger.VnGroupLog.Warnln("UdmVn5gGroupDataSubscriptions: ", udm_context.GetSelf().UdmVn5gGroupDataSubscriptions)
+	// logger.VnGroupLog.Warnln("internal group ID: ", groupId)
+	// logger.VnGroupLog.Warnln("subscribed vn 5g group data: ", vn5gGpSubs)
+	if vn5gGpSubs != nil {
+		onDataChangeNotificationurl := vn5gGpSubs.CallbackReference
+		logger.VnGroupLog.Warnln(onDataChangeNotificationurl)
+		httpResponse, err := clientAPI.DataChangeNotificationCallbackDocumentApi.OnDataChangeNotification(
+			ctx, onDataChangeNotificationurl, dataChangeNotification)
+		if err != nil {
+			if httpResponse == nil {
+				logger.HttpLog.Error(err.Error())
+				problemDetails = &models.ProblemDetails{
+					Status: http.StatusForbidden,
+					Detail: err.Error(),
+				}
+			} else {
+				logger.HttpLog.Errorln(err.Error())
+
+				problemDetails = &models.ProblemDetails{
+					Status: int32(httpResponse.StatusCode),
+					Detail: err.Error(),
+				}
+			}
+		}
+		defer func() {
+			if rspCloseErr := httpResponse.Body.Close(); rspCloseErr != nil {
+				logger.HttpLog.Errorf("OnDataChangeNotification response body cannot close: %+v", rspCloseErr)
+			}
+		}()
+	} else {
+		return &models.ProblemDetails{
+			Status: http.StatusInternalServerError,
+			Detail: fmt.Sprintf("can not find callback URL for 5glan-Multicast data changed for group Id[%s]", groupId),
+		}
+	}
+
+	return problemDetails
 }

@@ -35,6 +35,8 @@ const (
 func Init() {
 	GetSelf().NfService = make(map[models.ServiceName]models.NfService)
 	GetSelf().EeSubscriptionIDGenerator = idgenerator.NewGenerator(1, math.MaxInt32)
+	GetSelf().Vn5gGroupDataSubscriptionIDGenerator = 1
+	GetSelf().UdmVn5gGroupDataSubscriptions = make(map[string]*ben_models.Vn5gGroupConfigSubscription)
 }
 
 type NFContext interface {
@@ -44,23 +46,25 @@ type NFContext interface {
 var _ NFContext = &UDMContext{}
 
 type UDMContext struct {
-	NfId                           string
-	GroupId                        string
-	SBIPort                        int
-	RegisterIPv4                   string // IP register to NRF
-	BindingIPv4                    string
-	UriScheme                      models.UriScheme
-	NfService                      map[models.ServiceName]models.NfService
-	NFDiscoveryClient              *Nnrf_NFDiscovery.APIClient
-	UdmUePool                      sync.Map // map[supi]*UdmUeContext
-	NrfUri                         string
-	NrfCertPem                     string
-	GpsiSupiList                   models.IdentityData
-	SharedSubsDataMap              map[string]ben_models.SharedData // sharedDataIds as key
-	SubscriptionOfSharedDataChange sync.Map                         // subscriptionID as key
-	SuciProfiles                   []suci.SuciProfile
-	EeSubscriptionIDGenerator      *idgenerator.IDGenerator
-	OAuth2Required                 bool
+	NfId                                 string
+	GroupId                              string
+	SBIPort                              int
+	RegisterIPv4                         string // IP register to NRF
+	BindingIPv4                          string
+	UriScheme                            models.UriScheme
+	NfService                            map[models.ServiceName]models.NfService
+	NFDiscoveryClient                    *Nnrf_NFDiscovery.APIClient
+	UdmUePool                            sync.Map // map[supi]*UdmUeContext
+	NrfUri                               string
+	NrfCertPem                           string
+	GpsiSupiList                         models.IdentityData
+	SharedSubsDataMap                    map[string]ben_models.SharedData // sharedDataIds as key
+	SubscriptionOfSharedDataChange       sync.Map                         // subscriptionID as key
+	Vn5gGroupDataSubscriptionIDGenerator int
+	UdmVn5gGroupDataSubscriptions        map[string]*ben_models.Vn5gGroupConfigSubscription // groupID as key
+	SuciProfiles                         []suci.SuciProfile
+	EeSubscriptionIDGenerator            *idgenerator.IDGenerator
+	OAuth2Required                       bool
 }
 
 type UdmUeContext struct {

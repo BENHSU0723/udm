@@ -8,6 +8,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"github.com/free5gc/udm/internal/logger"
+	"github.com/free5gc/udm/pkg/factory"
 	logger_util "github.com/free5gc/util/logger"
 )
 
@@ -40,7 +41,7 @@ func NewRouter() *gin.Engine {
 }
 
 func AddService(engine *gin.Engine) *gin.RouterGroup {
-	group := engine.Group("")
+	group := engine.Group(factory.UdmCallbackUriPrefix)
 
 	for _, route := range routes {
 		switch route.Method {
@@ -77,5 +78,14 @@ var routes = Routes{
 		strings.ToUpper("Post"),
 		"/sdm-subscriptions",
 		HTTPDataChangeNotificationToNF,
+	},
+
+	// It's used for NFs which needs the 5glan group related data changed info, e.g. SMF
+	// groupId implys internal group id
+	{
+		"Vn5gGroupDataChangeNotifyToNF",
+		strings.ToUpper("Post"),
+		"/5g-vn-groups/:groupId",
+		HTTPPostVn5gGroupConfigSubscriptions,
 	},
 }
