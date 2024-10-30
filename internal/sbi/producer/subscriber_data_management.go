@@ -568,7 +568,7 @@ func getSharedDataProcedure(sharedDataIds []string, supportedFeatures string) (
 			logger.SdmLog.Warnln(err)
 			problemDetails = &models.ProblemDetails{
 				Status: int32(res.StatusCode),
-				Cause:  err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails).Cause,
+				Cause:  err.(openapi.GenericOpenAPIError).Model().(ben_models.ProblemDetails).Cause,
 				Detail: err.Error(),
 			}
 

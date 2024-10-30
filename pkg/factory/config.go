@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/BENHSU0723/openapi_public/models"
 	"github.com/asaskevich/govalidator"
 
 	"github.com/free5gc/udm/internal/logger"
@@ -61,11 +62,13 @@ type Info struct {
 }
 
 type Configuration struct {
-	Sbi             *Sbi               `yaml:"sbi,omitempty"  valid:"required"`
-	ServiceNameList []string           `yaml:"serviceNameList,omitempty"  valid:"required"`
-	NrfUri          string             `yaml:"nrfUri,omitempty"  valid:"required, url"`
-	NrfCertPem      string             `yaml:"nrfCertPem,omitempty" valid:"optional"`
-	SuciProfiles    []suci.SuciProfile `yaml:"SuciProfile,omitempty"`
+	Sbi                     *Sbi               `yaml:"sbi,omitempty"  valid:"required"`
+	ServiceNameList         []string           `yaml:"serviceNameList,omitempty"  valid:"required"`
+	NrfUri                  string             `yaml:"nrfUri,omitempty"  valid:"required, url"`
+	NrfCertPem              string             `yaml:"nrfCertPem,omitempty" valid:"optional"`
+	SuciProfiles            []suci.SuciProfile `yaml:"SuciProfile,omitempty"`
+	Plmn                    models.PlmnId      `yaml:"plmn,omitempty"`
+	VnGroup5glanServiceType []string           `yaml:"vnGroup5glanServiceType,omitempty"`
 }
 type Logger struct {
 	Enable       bool   `yaml:"enable" valid:"type(bool)"`

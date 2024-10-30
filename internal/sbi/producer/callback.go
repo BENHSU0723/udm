@@ -1,10 +1,12 @@
 package producer
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 
 	ben_models "github.com/BENHSU0723/openapi_public/models"
+	"github.com/free5gc/openapi"
 	"github.com/free5gc/openapi/models"
 	udm_context "github.com/free5gc/udm/internal/context"
 	"github.com/free5gc/udm/internal/logger"
@@ -39,6 +41,31 @@ func HandlePostVn5gGroupSubscription(request *httpwrapper.Request) *httpwrapper.
 	groupId := request.Params["groupId"]
 	logger.CallbackLog.Warnln("group ID: ", groupId)
 	logger.CallbackLog.Warnln("Group Config Subscription: ", groupConfigSubs)
+
+	clientAPI, err := createBenUDMClientToUDR("")
+	if err != nil {
+		logger.VnGroupLog.Errorln("createBenUDMClientToUDR error: " + err.Error())
+		return httpwrapper.NewResponse(http.StatusInternalServerError, nil, nil)
+	}
+
+	//Get 5G LAN VN Group config from UDR
+	grouoIdList, res, err := clientAPI.GroupIdentifiersDocumentApi.GetGroupIdsAndUeIds(context.Background(), "", groupId, false)
+	if err != nil {
+		problemDetails := &models.ProblemDetails{
+			Status: int32(res.StatusCode),
+			Cause:  err.(openapi.GenericOpenAPIError).Model().(models.ProblemDetails).Cause,
+			Detail: err.Error(),
+		}
+		logger.VnGroupLog.Errorln(problemDetails.Detail)
+		return httpwrapper.NewResponse(http.StatusInternalServerError, nil, nil)
+	}
+	groupConfigSubs.ExternalGroupId = grouoIdList.ExtGroupId
+
+	defer func() {
+		if rspCloseErr := res.Body.Close(); rspCloseErr != nil {
+			logger.VnGroupLog.Errorf("VN5GLANgroupDataGet response body cannot close: %+v", rspCloseErr)
+		}
+	}()
 
 	udmSelf := udm_context.GetSelf()
 	udmSelf.UdmVn5gGroupDataSubscriptions[groupId] = &groupConfigSubs

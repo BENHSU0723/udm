@@ -18,6 +18,7 @@ import (
 	"github.com/free5gc/openapi/models"
 	"github.com/free5gc/util/httpwrapper"
 
+	udm_context "github.com/free5gc/udm/internal/context"
 	"github.com/free5gc/udm/internal/util"
 	"github.com/free5gc/util/mongoapi"
 )
@@ -152,7 +153,7 @@ func ExtIntGroupIDMap(extGroupId string, groupConfig *ben_models.Model5GvnGroupC
 
 	//cnt size is flexible
 	for cnt := 0; cnt < 10; cnt++ {
-		internalGroupId := InterGroupIdGenerator(ueId)
+		internalGroupId := InterGroupIdGenerator(ueId, groupConfig.Var5gVnGroupData.AppDescriptors)
 		groupConfig.InternalGroupIdentifier = internalGroupId
 		filterData := bson.M{"externalGroupId": extGroupId}
 
@@ -179,22 +180,33 @@ func ExtIntGroupIDMap(extGroupId string, groupConfig *ben_models.Model5GvnGroupC
 	return false, errors.New("ExtIntGroupIDMap random generator error")
 }
 
-func InterGroupIdGenerator(ueId string) (intGroupID string) {
+func InterGroupIdGenerator(ueId string, appDescList []ben_models.AppDescriptor) (intGroupID string) {
 	//Group ID Pattern: '^[A-Fa-f0-9]{8}-[0-9]{3}-[0-9]{2,3}-([A-Fa-f0-9][A-Fa-f0-9]){1,10}$'.
 	const letterBytes = "abcdefABCDEF0123456789"
 	var letterRunes = []rune(letterBytes)
 
-	//retrive plmn id from imsi, TODO: may have better way to get plmn value
-	plmn := ueId[:5]
-	if ueId[:5] == "imsi-" {
-		plmn = ueId[5:10]
+	//get plmn id from udm config file
+	var serviceID string
+check:
+	for _, appDes := range appDescList {
+		//servie name as key
+		for serType, _ := range appDes.AppIds {
+			if udm_context.GetSelf().Vn5glanServiceType[serType] != "" {
+				serviceID = udm_context.GetSelf().Vn5glanServiceType[serType]
+				break check
+			}
+		}
 	}
+	if serviceID == "" {
+		serviceID = "AAA00001"
+	}
+	plmn := udm_context.GetSelf().Plmn
 
-	intGroupID = "12345566" //TODO: Group service identifier, it shoud be predefine service number
+	intGroupID += serviceID
 	intGroupID += "-"
-	intGroupID += plmn[:3] //MCC
+	intGroupID += plmn.Mcc //MCC
 	intGroupID += "-"
-	intGroupID += plmn[3:] //MNC
+	intGroupID += plmn.Mnc //MNC
 	intGroupID += "-"
 	intGroupID += randStringRunes(10, letterRunes) //size is flexible between 1 to 10, even size only
 	return

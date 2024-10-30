@@ -37,6 +37,7 @@ func Init() {
 	GetSelf().EeSubscriptionIDGenerator = idgenerator.NewGenerator(1, math.MaxInt32)
 	GetSelf().Vn5gGroupDataSubscriptionIDGenerator = 1
 	GetSelf().UdmVn5gGroupDataSubscriptions = make(map[string]*ben_models.Vn5gGroupConfigSubscription)
+	GetSelf().Vn5glanServiceType = map[string]string{}
 }
 
 type NFContext interface {
@@ -65,6 +66,8 @@ type UDMContext struct {
 	SuciProfiles                         []suci.SuciProfile
 	EeSubscriptionIDGenerator            *idgenerator.IDGenerator
 	OAuth2Required                       bool
+	Plmn                                 models.PlmnId
+	Vn5glanServiceType                   map[string]string //service Name as key
 }
 
 type UdmUeContext struct {
@@ -140,6 +143,15 @@ func InitUdmContext(context *UDMContext) {
 	servingNameList := configuration.ServiceNameList
 
 	udmContext.SuciProfiles = configuration.SuciProfiles
+
+	// 5glan used
+	udmContext.Plmn = models.PlmnId(configuration.Plmn)
+	for _, serIdMap := range context.Vn5glanServiceType {
+		strSlice := strings.Split(serIdMap, "-")
+		serviceName := strSlice[0]
+		serviceId := strSlice[1]
+		udmContext.Vn5glanServiceType[serviceName] = serviceId
+	}
 
 	udmContext.InitNFService(servingNameList, config.Info.Version)
 }
